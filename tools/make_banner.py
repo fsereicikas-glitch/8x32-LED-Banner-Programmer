@@ -17,16 +17,36 @@ def escape_literal(text: str) -> str:
 
 
 def build_header(messages, speed: int, intensity: int) -> str:
-    lines = [HEADER_GUARD, "#pragma once\n", "#include <Arduino.h>\n", "// Scrolling parameters\n"]
+    # Use an include guard and proper PROGMEM storage for string literals.
+    lines = [
+        HEADER_GUARD,
+        "#ifndef MESSAGES_H\n",
+        "#define MESSAGES_H\n\n",
+        "#include <Arduino.h>\n",
+        "// Only include <avr/pgmspace.h> for AVR builds; provide a PROGMEM fallback\n",
+        "#if defined(ARDUINO_ARCH_AVR)\n",
+        "#  include <avr/pgmspace.h>\n",
+        "#else\n",
+        "#  ifndef PROGMEM\n",
+        "#    define PROGMEM\n",
+        "#  endif\n",
+        "#endif\n\n",
+        "// Scrolling parameters\n",
+    ]
     lines.append(f"constexpr uint8_t SCROLL_SPEED = {speed};\n")
     lines.append(f"constexpr uint8_t DISPLAY_INTENSITY = {intensity};\n\n")
-    lines.append("// Messages displayed by the Arduino sketch\n")
-    lines.append("static const char* const messages[] PROGMEM = {\n")
-    for msg in messages:
+
+    lines.append("// Messages stored in flash (PROGMEM)\n")
+    # Emit each message as its own PROGMEM char array, then an array of pointers
+    for i, msg in enumerate(messages):
         safe = escape_literal(msg)
-        lines.append(f"  \"{safe}\",\n")
-    lines.append("};\n")
-    lines.append("constexpr uint8_t MESSAGE_COUNT = sizeof(messages) / sizeof(messages[0]);\n")
+        lines.append(f'static const char message_{i}[] PROGMEM = "{safe}";\n')
+    lines.append("\nstatic const char* const messages[] PROGMEM = {\n")
+    for i in range(len(messages)):
+        lines.append(f"  message_{i},\n")
+    lines.append("};\n\n")
+    lines.append("constexpr uint8_t MESSAGE_COUNT = sizeof(messages) / sizeof(messages[0]);\n\n")
+    lines.append("#endif // MESSAGES_H\n")
     return "".join(lines)
 
 
